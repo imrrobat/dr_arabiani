@@ -214,6 +214,16 @@ def reserve_nobat(nobat_id, name, phone):
     conn.close()
 
 
+def clear_all_nobats():
+    conn = sqlite3.connect("database.db")
+    cur = conn.cursor()
+
+    cur.execute("DELETE FROM nobat")
+
+    conn.commit()
+    conn.close()
+
+
 def get_all_nobats():
     conn = sqlite3.connect("database.db")
     cur = conn.cursor()
@@ -346,6 +356,15 @@ async def receive_user_info(pm: Message, state: FSMContext):
     await state.clear()
 
 
+async def clear_handler(pm: Message):
+    if pm.from_user.id not in ADMIN_USERS:
+        await pm.answer("شما اجازه انجام این کار رو ندارین ❌")
+        return
+
+    clear_all_nobats()
+    await pm.answer("تمام نوبت‌ها با موفقیت پاک شدند ✅")
+
+
 async def main():
     bot = Bot(API_TOKEN)
     dp = Dispatcher()
@@ -354,6 +373,7 @@ async def main():
     dp.message.register(add_handler, Command("add"))
     dp.message.register(show_handler, Command("show"))
     dp.message.register(nobat_handler, Command("nobat"))
+    dp.message.register(clear_handler, Command("clear"))
 
     dp.callback_query.register(
         day_selected_handler, lambda c: c.data.startswith("day:")
