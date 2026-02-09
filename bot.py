@@ -17,7 +17,7 @@ async def main():
     bot = Bot(API_TOKEN)
     dp = Dispatcher()
 
-    dp.message.register(start_handler, CommandStart)
+    dp.message.register(start_handler, CommandStart())
     dp.message.register(add_handler, Command("add"))
 
     await dp.start_polling(bot)
