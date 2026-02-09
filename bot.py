@@ -18,16 +18,16 @@ async def add_handler(pm: Message):
 
             result = parse_schedule(inp)
 
-            text = ""
-            for day, times in result.items():
-                text += f"{day}\n"
-                for t in times:
-                    text += f"  {t}\n"
+            text_lines = []
 
-            await pm.answer(text)
+            for day, times in result.items():
+                for t in times:
+                    text_lines.append(f"{day} | {t}")
+
+            await pm.answer("\n".join(text_lines))
 
         except Exception as e:
-            await pm.answer("Error in input format")
+            await pm.answer("فرمت اشتباه")
             print(e)
     else:
         await pm.answer("برای اضافه کردن باید ادمین باشین")
