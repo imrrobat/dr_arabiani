@@ -13,10 +13,22 @@ async def start_handler(pm: Message):
 async def add_handler(pm: Message):
     if pm.from_user.id in ADMIN_USERS:
         try:
-            result = parse_schedule(pm.text[1:])
-            await pm.answer(result)
-        except:
-            await pm.answer("Error")
+            lines = pm.text.splitlines()
+            inp = "\n".join(lines[1:])  # حذف /add
+
+            result = parse_schedule(inp)
+
+            text = ""
+            for day, times in result.items():
+                text += f"{day}\n"
+                for t in times:
+                    text += f"  {t}\n"
+
+            await pm.answer(text)
+
+        except Exception as e:
+            await pm.answer("Error in input format")
+            print(e)
     else:
         await pm.answer("برای اضافه کردن باید ادمین باشین")
 
