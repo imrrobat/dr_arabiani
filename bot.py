@@ -9,13 +9,14 @@ from aiogram.fsm.context import FSMContext
 
 from utils import parse_schedule, build_time_keyboard, build_days_keyboard
 from db import (
-    get_available_days, 
-    get_free_nobats_by_day, 
+    get_available_days,
+    get_free_nobats_by_day,
     get_all_nobats,
     clear_all_nobats,
     reserve_nobat,
     save_schedule_to_db,
-    )
+    get_user_nobats,
+)
 from config import API_TOKEN, ADMIN_USERS
 from menu import START_MENU
 
@@ -29,15 +30,16 @@ cur = conn.cursor()
 
 cur.execute(
     """
-CREATE TABLE IF NOT EXISTS nobat (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    day TEXT NOT NULL,
-    time_slot TEXT NOT NULL,
-    is_reserved INTEGER DEFAULT 0,
-    reserved_name TEXT,
-    reserved_phone TEXT
-)
-"""
+    CREATE TABLE IF NOT EXISTS nobat (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        day TEXT NOT NULL,
+        time_slot TEXT NOT NULL,
+        is_reserved INTEGER DEFAULT 0,
+        reserved_name TEXT,
+        reserved_phone TEXT,
+        reserved_user_id INTEGER
+    )
+    """
 )
 
 conn.commit()
@@ -115,6 +117,7 @@ async def day_selected_handler(cb: CallbackQuery):
 
     await cb.answer()
 
+
 async def reserve_nobat_handler(cb: CallbackQuery, state: FSMContext):
     nobat_id = int(cb.data.split(":")[1])
 
@@ -143,13 +146,15 @@ async def receive_user_info(pm: Message, state: FSMContext):
 
     name = data[0].strip()
     phone = data[1].strip()
+    user_id = pm.from_user.id
 
     state_data = await state.get_data()
     nobat_id = state_data["nobat_id"]
 
-    reserve_nobat(nobat_id, name, phone)
+    reserve_nobat(nobat_id, user_id, name, phone)
 
     await pm.answer("نوبت با موفقیت ثبت شد ✅")
+
     await state.clear()
 
 
@@ -162,6 +167,21 @@ async def clear_handler(pm: Message):
     await pm.answer("تمام نوبت‌ها با موفقیت پاک شدند ✅")
 
 
+async def my_nobat_handler(pm: Message):
+    user_id = pm.from_user.id
+    rows = get_user_nobats(user_id)
+
+    if not rows:
+        await pm.answer("شما هیچ نوبتی رزرو نکردین")
+        return
+
+    lines = []
+    for day, time_slot, name, phone in rows:
+        lines.append(f"{day} - {time_slot}")
+
+    await pm.answer("نوبت‌های شما:\n" + "\n".join(lines))
+
+
 async def main():
     bot = Bot(API_TOKEN)
     dp = Dispatcher()
@@ -171,6 +191,7 @@ async def main():
     dp.message.register(show_handler, Command("show"))
     dp.message.register(nobat_handler, Command("nobat"))
     dp.message.register(clear_handler, Command("clear"))
+    dp.message.register(my_nobat_handler, Command("mine"))
 
     dp.callback_query.register(
         day_selected_handler, lambda c: c.data.startswith("day:")

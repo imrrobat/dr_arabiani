@@ -1,5 +1,6 @@
 import sqlite3
 
+
 def get_available_days(limit=5):
     conn = sqlite3.connect("database.db")
     cur = conn.cursor()
@@ -19,6 +20,7 @@ def get_available_days(limit=5):
     conn.close()
     return days
 
+
 def get_free_nobats_by_day(day):
     conn = sqlite3.connect("database.db")
     cur = conn.cursor()
@@ -36,6 +38,7 @@ def get_free_nobats_by_day(day):
     rows = cur.fetchall()
     conn.close()
     return rows
+
 
 def save_schedule_to_db(schedule: dict):
     conn = sqlite3.connect("database.db")
@@ -55,19 +58,20 @@ def save_schedule_to_db(schedule: dict):
     conn.close()
 
 
-def reserve_nobat(nobat_id, name, phone):
+def reserve_nobat(nobat_id, user_id, name, phone):
     conn = sqlite3.connect("database.db")
     cur = conn.cursor()
 
     cur.execute(
         """
-    UPDATE nobat
-    SET is_reserved = 1,
-        reserved_name = ?,
-        reserved_phone = ?
-    WHERE id = ? AND is_reserved = 0
-    """,
-        (name, phone, nobat_id),
+        UPDATE nobat
+        SET is_reserved = 1,
+            reserved_name = ?,
+            reserved_phone = ?,
+            reserved_user_id = ?
+        WHERE id = ? AND is_reserved = 0
+        """,
+        (name, phone, user_id, nobat_id),
     )
 
     conn.commit()
@@ -94,6 +98,25 @@ def get_all_nobats():
     FROM nobat
     ORDER BY day, time_slot
     """
+    )
+
+    rows = cur.fetchall()
+    conn.close()
+    return rows
+
+
+def get_user_nobats(user_id):
+    conn = sqlite3.connect("database.db")
+    cur = conn.cursor()
+
+    cur.execute(
+        """
+        SELECT day, time_slot, reserved_name, reserved_phone
+        FROM nobat
+        WHERE reserved_user_id = ?
+        ORDER BY day, time_slot
+        """,
+        (user_id,),
     )
 
     rows = cur.fetchall()
