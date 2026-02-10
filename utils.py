@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta
-
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 def parse_schedule(inp: str) -> dict:
     schedule = {}
@@ -44,3 +44,35 @@ def parse_schedule(inp: str) -> dict:
             final_schedule[day].extend(split_to_45min(r))
 
     return final_schedule
+
+
+def build_time_keyboard(day, nobats):
+    keyboard = []
+    row = []
+
+    for i, (nobat_id, time_slot) in enumerate(nobats):
+        start_time, end_time = time_slot.split("-")
+
+        row.append(
+            InlineKeyboardButton(
+                text=f"{start_time} - {end_time}",
+                callback_data=f"reserve:{nobat_id}"
+            )
+        )
+
+        if (i + 1) % 4 == 0:
+            keyboard.append(row)
+            row = []
+
+    if row:
+        keyboard.append(row)
+
+    return InlineKeyboardMarkup(inline_keyboard=keyboard)
+
+
+def build_days_keyboard(days):
+    keyboard = [
+        [InlineKeyboardButton(text=day, callback_data=f"day:{day}")] for day in days
+    ]
+
+    return InlineKeyboardMarkup(inline_keyboard=keyboard)

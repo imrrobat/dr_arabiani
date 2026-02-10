@@ -1,15 +1,23 @@
+import sqlite3
 import asyncio
 from aiogram import Bot, Dispatcher
 from aiogram.types import Message
 from aiogram.filters import CommandStart, Command
-from pars_date import parse_schedule
-from config import API_TOKEN, ADMIN_USERS
-import sqlite3
-from collections import OrderedDict
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.types import CallbackQuery
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.context import FSMContext
+
+from utils import parse_schedule, build_time_keyboard, build_days_keyboard
+from db import (
+    get_available_days, 
+    get_free_nobats_by_day, 
+    get_all_nobats,
+    clear_all_nobats,
+    reserve_nobat,
+    save_schedule_to_db,
+    )
+from config import API_TOKEN, ADMIN_USERS
+from menu import START_MENU
 
 
 class ReserveState(StatesGroup):
@@ -36,213 +44,8 @@ conn.commit()
 conn.close()
 
 
-def get_available_days(limit=5):
-    conn = sqlite3.connect("database.db")
-    cur = conn.cursor()
-
-    cur.execute(
-        """
-    SELECT DISTINCT day
-    FROM nobat
-    WHERE is_reserved = 0
-    ORDER BY day
-    LIMIT ?
-    """,
-        (limit,),
-    )
-
-    days = [row[0] for row in cur.fetchall()]
-    conn.close()
-    return days
-
-
-def get_free_nobats_by_day(day):
-    conn = sqlite3.connect("database.db")
-    cur = conn.cursor()
-
-    cur.execute(
-        """
-    SELECT id, time_slot
-    FROM nobat
-    WHERE day = ? AND is_reserved = 0
-    ORDER BY time_slot
-    """,
-        (day,),
-    )
-
-    rows = cur.fetchall()
-    conn.close()
-    return rows
-
-
-def build_time_keyboard(day, nobats):
-    keyboard = []
-    row = []
-
-    for i, (nobat_id, time_slot) in enumerate(nobats):
-        start_time = time_slot.split("-")[0]
-
-        row.append(
-            InlineKeyboardButton(
-                text=f"{day} | {start_time}", callback_data=f"reserve:{nobat_id}"
-            )
-        )
-
-        if (i + 1) % 4 == 0:
-            keyboard.append(row)
-            row = []
-
-    if row:
-        keyboard.append(row)
-
-    return InlineKeyboardMarkup(inline_keyboard=keyboard)
-
-
-def build_days_keyboard(days):
-    keyboard = [
-        [InlineKeyboardButton(text=day, callback_data=f"day:{day}")] for day in days
-    ]
-
-    return InlineKeyboardMarkup(inline_keyboard=keyboard)
-
-
-def get_free_nobats_for_keyboard():
-    conn = sqlite3.connect("database.db")
-    cur = conn.cursor()
-
-    cur.execute(
-        """
-    SELECT id, day, time_slot
-    FROM nobat
-    WHERE is_reserved = 0
-    ORDER BY day, time_slot
-    """
-    )
-
-    rows = cur.fetchall()
-    conn.close()
-
-    days = OrderedDict()
-
-    for nobat_id, day, time_slot in rows:
-        if day not in days:
-            if len(days) == 3:  # فقط ۳ روز
-                break
-            days[day] = []
-
-        if len(days[day]) < 8:  # فقط ۸ نوبت برای هر روز
-            days[day].append((nobat_id, time_slot))
-
-    return days
-
-
-def build_nobat_keyboard(days_dict):
-    keyboard = []
-
-    for day, nobats in days_dict.items():
-        row = []
-        for i, (nobat_id, time_slot) in enumerate(nobats):
-            start_time = time_slot.split("-")[0]
-
-            row.append(
-                InlineKeyboardButton(
-                    text=f"{day} | {start_time}", callback_data=f"reserve:{nobat_id}"
-                )
-            )
-
-            if (i + 1) % 4 == 0:
-                keyboard.append(row)
-                row = []
-
-        if row:
-            keyboard.append(row)
-
-    return InlineKeyboardMarkup(inline_keyboard=keyboard)
-
-
-def save_schedule_to_db(schedule: dict):
-    conn = sqlite3.connect("database.db")
-    cur = conn.cursor()
-
-    for day, times in schedule.items():
-        for t in times:
-            cur.execute(
-                """
-            INSERT INTO nobat (day, time_slot)
-            VALUES (?, ?)
-            """,
-                (day, t),
-            )
-
-    conn.commit()
-    conn.close()
-
-
-def get_free_nobats():
-    conn = sqlite3.connect("database.db")
-    cur = conn.cursor()
-
-    cur.execute(
-        """
-    SELECT id, day, time_slot
-    FROM nobat
-    WHERE is_reserved = 0
-    """
-    )
-
-    rows = cur.fetchall()
-    conn.close()
-    return rows
-
-
-def reserve_nobat(nobat_id, name, phone):
-    conn = sqlite3.connect("database.db")
-    cur = conn.cursor()
-
-    cur.execute(
-        """
-    UPDATE nobat
-    SET is_reserved = 1,
-        reserved_name = ?,
-        reserved_phone = ?
-    WHERE id = ? AND is_reserved = 0
-    """,
-        (name, phone, nobat_id),
-    )
-
-    conn.commit()
-    conn.close()
-
-
-def clear_all_nobats():
-    conn = sqlite3.connect("database.db")
-    cur = conn.cursor()
-
-    cur.execute("DELETE FROM nobat")
-
-    conn.commit()
-    conn.close()
-
-
-def get_all_nobats():
-    conn = sqlite3.connect("database.db")
-    cur = conn.cursor()
-
-    cur.execute(
-        """
-    SELECT day, time_slot, is_reserved, reserved_name, reserved_phone
-    FROM nobat
-    ORDER BY day, time_slot
-    """
-    )
-
-    rows = cur.fetchall()
-    conn.close()
-    return rows
-
-
 async def start_handler(pm: Message):
-    await pm.answer("سلام به بات دکتر عربیانی خوش اومدید")
+    await pm.answer(START_MENU)
 
 
 async def add_handler(pm: Message):
@@ -253,6 +56,7 @@ async def add_handler(pm: Message):
 
             result = parse_schedule(inp)
             save_schedule_to_db(result)
+            await pm.answer("نوبت‌ها با موفقیت ثبت شدند")
 
         except Exception as e:
             await pm.answer("فرمت اشتباه")
@@ -311,14 +115,9 @@ async def day_selected_handler(cb: CallbackQuery):
 
     await cb.answer()
 
-
-from aiogram.fsm.context import FSMContext
-
-
 async def reserve_nobat_handler(cb: CallbackQuery, state: FSMContext):
     nobat_id = int(cb.data.split(":")[1])
 
-    # ذخیره nobat_id در state
     await state.update_data(nobat_id=nobat_id)
     await state.set_state(ReserveState.waiting_for_info)
 
@@ -326,8 +125,8 @@ async def reserve_nobat_handler(cb: CallbackQuery, state: FSMContext):
         "لطفا اسم و فامیل رو در یک خط بنویس\n"
         "و در خط بعدی شماره تماس رو وارد کن\n\n"
         "مثال:\n"
-        "علی حیدری\n"
-        "849324234"
+        "نیکولو پاگانینی\n"
+        "123456789"
     )
 
     await cb.answer()
@@ -348,11 +147,9 @@ async def receive_user_info(pm: Message, state: FSMContext):
     state_data = await state.get_data()
     nobat_id = state_data["nobat_id"]
 
-    # ذخیره در دیتابیس
     reserve_nobat(nobat_id, name, phone)
 
     await pm.answer("نوبت با موفقیت ثبت شد ✅")
-
     await state.clear()
 
 
